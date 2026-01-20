@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IAMO - Instrumento de Avaliação Multifatorial da Obesidade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- FIREBASE SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // --- COLE SUA CONFIGURAÇÃO DO FIREBASE AQUI ---
+        // Você pega esses dados no Console do Firebase > Configurações do Projeto > Geral > Seus aplicativos
+        const firebaseConfig = {
+          apiKey: "AIzaSyAcZzh-e_s3pbpVi_4bJn-Wi1HxtaIph9g",
+          authDomain: "iamo-beta.firebaseapp.com",
+          projectId: "iamo-beta",
+          storageBucket: "iamo-beta.firebasestorage.app",
+          messagingSenderId: "548076489654",
+          appId: "1:548076489654:web:e91a21fe68438a101acf17"
+        };
+
+        // Inicializa Firebase
+        // Nota: Se a config acima estiver vazia, o app funcionará apenas localmente sem salvar no banco
+        let db;
+        let auth;
+        try {
+            if (firebaseConfig.apiKey !== "AIzaSyAcZzh-e_s3pbpVi_4bJn-Wi1HxtaIph9g") {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Autenticação anônima para permitir escrita no banco sem login do usuário
+                signInAnonymously(auth).catch((error) => {
+                    console.error("Erro na autenticação anônima:", error);
+                });
+                console.log("Firebase inicializado com sucesso.");
+            } else {
+                console.warn("Firebase não configurado. Os dados não serão salvos na nuvem.");
+            }
+        } catch (e) {
+            console.error("Erro ao inicializar Firebase:", e);
+        }
+
+        // Expõe as funções para o escopo global para serem usadas pelo script principal
+        window.salvarRespostasFirebase = async (dadosCompletos) => {
+            if (!db) {
+                console.warn("Banco de dados não configurado, pulando salvamento.");
+                return false;
+            }
+            try {
+                // Salva na coleção "respostas_iamo"
+                const docRef = await addDoc(collection(db, "respostas_iamo"), dadosCompletos);
+                console.log("Documento salvo com ID: ", docRef.id);
+                return true;
+            } catch (e) {
+                console.error("Erro ao adicionar documento: ", e);
+                alert("Houve um erro ao salvar seus dados online, mas o resultado será gerado normalmente.");
+                return false;
+            }
+        };
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        .form-radio-custom {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 1.5em;
+            height: 1.5em;
+            border: 2px solid #d1d5db;
+            border-radius: 50%;
+            display: inline-block;
+            position: relative;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .form-radio-custom:checked {
+            border-color: #3b82f6;
+        }
+
+        .form-radio-custom:checked::after {
+            content: '';
+            width: 0.8em;
+            height: 0.8em;
+            border-radius: 50%;
+            background: #3b82f6;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .form-checkbox-custom {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 1.5em;
+            height: 1.5em;
+            border: 2px solid #d1d5db;
+            border-radius: 0.25rem;
+            display: inline-block;
+            position: relative;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .form-checkbox-custom:checked {
+            border-color: #3b82f6;
+            background-color: #3b82f6;
+        }
+
+        .form-checkbox-custom:checked::after {
+            content: '✓';
+            font-size: 1.2em;
+            color: white;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .scale-radio:checked+label {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        select:invalid {
+            color: #9ca3af;
+        }
+
+        select option {
+            color: #111827;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+
+        .collapsible-content.expanded {
+            max-height: 2000px; /* Aumentei para garantir que textos longos apareçam */
+        }
+
+        .arrow-icon {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .arrow-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+        /* Loading spinner */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3498db;
+            width: 20px;
+            height: 20px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 md:p-8 max-w-4xl">
+        <header class="mb-8 flex justify-center items-center gap-4">
+            <!-- Adicione sua logo aqui ou use um placeholder -->
+            <!-- <img src="iamo_logo.png" alt="IAMO Logo" class="h-16 w-16 sm:h-20 sm:w-20"> -->
+            <div class="text-center">
+                <h1 class="text-3xl sm:text-4xl font-bold text-blue-600">IAMO</h1>
+                <p class="text-lg text-gray-600">Instrumento de Avaliação Multifatorial da Obesidade</p>
+            </div>
+        </header>
+
+        <main id="questionnaire-container" class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg">
+            <form id="iamo-form">
+                <!-- Etapa 0: Dados Iniciais -->
+                <div class="step active" data-step="0">
+                    <h2 class="text-2xl font-semibold mb-6 text-gray-700">Dados Iniciais</h2>
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <p class="text-sm text-blue-700">
+                            <strong>Aviso de Privacidade:</strong> Os dados preenchidos neste formulário serão utilizados anonimamente para fins estatísticos deste estudo. Ao clicar em "Ver Resultado", você concorda com o envio dessas informações.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="md:col-span-2">
+                            <label for="nome" class="block text-sm font-medium text-gray-700 mb-1">Nome Completo (ou Iniciais)</label>
+                            <input type="text" id="nome" name="nome"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="idade" class="block text-sm font-medium text-gray-700 mb-1">Idade (anos)</label>
+                            <input type="number" id="idade" name="idade" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="sexo" class="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
+                            <select id="sexo" name="sexo" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="" disabled selected>Selecione a opção</option>
+                                <option value="masculino">Masculino</option>
+                                <option value="feminino">Feminino</option>
+                                <option value="nao_informar">Prefiro não informar</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="peso" class="block text-sm font-medium text-gray-700 mb-1">Peso Atual
+                                (kg)</label>
+                            <input type="number" step="0.1" id="peso" name="peso" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="altura" class="block text-sm font-medium text-gray-700 mb-1">Altura (m)</label>
+                            <input type="number" step="0.01" id="altura" name="altura" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Ex: 1.75">
+                        </div>
+                        <div>
+                            <label for="tabagismo"
+                                class="block text-sm font-medium text-gray-700 mb-1">Tabagismo</label>
+                            <select id="tabagismo" name="tabagismo" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="" disabled selected>Selecione a opção</option>
+                                <option value="nunca_fumou">Nunca fumou</option>
+                                <option value="ex_fumante">Ex-fumante</option>
+                                <option value="fumante_ocasional">Fumante ocasional</option>
+                                <option value="fumante_diario">Fumante diário</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="etilismo" class="block text-sm font-medium text-gray-700 mb-1">Consumo de
+                                Álcool</label>
+                            <select id="etilismo" name="etilismo" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="" disabled selected>Selecione a opção</option>
+                                <option value="nao_consome">Não consome</option>
+                                <option value="raramente">Raramente (menos de 1x/mês)</option>
+                                <option value="socialmente_semanal">Socialmente (1-2x/semana)</option>
+                                <option value="frequente_semanal">Frequente (3-5x/semana)</option>
+                                <option value="diario">Diário</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="ocupacao" class="block text-sm font-medium text-gray-700 mb-1">Ocupação</label>
+                            <input type="text" id="ocupacao" name="ocupacao"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="horas_trabalho" class="block text-sm font-medium text-gray-700 mb-1">Horas
+                                trabalhadas por semana</label>
+                            <input type="number" id="horas_trabalho" name="horas_trabalho"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="escolaridade"
+                                class="block text-sm font-medium text-gray-700 mb-1">Escolaridade</label>
+                            <select id="escolaridade" name="escolaridade" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="" disabled selected>Selecione a opção</option>
+                                <option value="fundamental_incompleto">Fundamental Incompleto</option>
+                                <option value="fundamental_completo">Fundamental Completo</option>
+                                <option value="medio_incompleto">Médio Incompleto</option>
+                                <option value="medio_completo">Médio Completo</option>
+                                <option value="superior_incompleto">Superior Incompleto</option>
+                                <option value="superior_completo">Superior Completo</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="transporte" class="block text-sm font-medium text-gray-700 mb-1">Principal meio
+                                de transporte</label>
+                            <select id="transporte" name="transporte" required
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="" disabled selected>Selecione a opção</option>
+                                <option value="a_pe_bicicleta">A pé / Bicicleta</option>
+                                <option value="transporte_publico">Transporte Público</option>
+                                <option value="carro_moto">Carro / Moto</option>
+                                <option value="app">Transporte por App</option>
+                                <option value="trabalho_em_casa">Trabalho em casa</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Quem prepara as principais
+                                refeições?</label>
+                            <div class="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+                                <label class="flex items-center"><input type="radio" name="preparaRefeicoes"
+                                        value="eu_mesmo" class="form-radio-custom mr-2"><span class="text-sm">Eu
+                                        mesmo</span></label>
+                                <label class="flex items-center"><input type="radio" name="preparaRefeicoes"
+                                        value="familia" class="form-radio-custom mr-2"><span
+                                        class="text-sm">Cônjuge/Família</span></label>
+                                <label class="flex items-center"><input type="radio" name="preparaRefeicoes"
+                                        value="delivery" class="form-radio-custom mr-2"><span class="text-sm">Compro
+                                        fora/Delivery</span></label>
+                                <label class="flex items-center"><input type="radio" name="preparaRefeicoes"
+                                        value="outro" class="form-radio-custom mr-2"><span
+                                        class="text-sm">Outro</span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Etapa 1: Questionário IAMO -->
+                <div class="step" data-step="1">
+                    <h2 class="text-2xl font-semibold mb-6 text-gray-700">Questionário IAMO</h2>
+                    <div id="questions-wrapper" class="space-y-8">
+                        <!-- As questões serão injetadas aqui via JS -->
+                    </div>
+                </div>
+            </form>
+            <div class="mt-8 flex justify-between">
+                <button id="prev-btn"
+                    class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                    disabled>Anterior</button>
+                <button id="next-btn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors duration-200">Iniciar
+                    Questionário</button>
+                <button id="submit-btn"
+                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors duration-200 items-center justify-center"
+                    style="display: none;">
+                    <span class="btn-text">Ver Resultado</span>
+                </button>
+            </div>
+        </main>
+
+        <section id="results-container" class="hidden mt-8">
+            <div id="report-to-print" class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg">
+                <!-- 1. DADOS DO PACIENTE -->
+                <div id="patient-data-section">
+                    <h2 class="text-3xl font-bold text-center mb-2 text-gray-800">Resultado da Avaliação</h2>
+                    <p id="patient-name-report" class="text-center text-xl text-gray-600 mb-8"></p>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                        <div id="chart-container" class="h-80 lg:h-96">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                        <div id="score-summary">
+                            <!-- Scores serão inseridos aqui -->
+                        </div>
+                    </div>
+                    <div id="imc-visualizer" class="mt-8"></div>
+                </div>
+                <hr class="my-8 border-gray-200">
+
+                <!-- Conteúdo do Relatório -->
+                <div id="report-content" class="space-y-8">
+                    <!-- As seções do relatório serão injetadas aqui -->
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <button id="pdf-btn"
+                    class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 mb-2 sm:mb-0">Gerar
+                    Relatório em PDF</button>
+                <button id="export-btn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 ml-0 sm:ml-4 mb-2 sm:mb-0">Baixar Cópia (JSON)</button>
+                <button id="restart-btn"
+                    class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 ml-0 sm:ml-4">Nova
+                    Avaliação</button>
+            </div>
+            <div id="save-status-msg" class="text-center mt-4 text-sm text-gray-500"></div>
+        </section>
+    </div>
+
+    <script>
+        // --- ESTRUTURA DAS QUESTÕES ---
+        const questions = [
+            // Foco 1: Atividade Física
+            { q: 1, focus: "AF", type: 'radio', text: 'Em uma semana comum, quantos dias você faz pelo menos 20 minutos de atividade física VIGOROSA? (Ex: correr, jogar futebol, aula de ginástica pesada - que aumentam MUITO a respiração/batimentos cardíacos)', options: [{ text: 'Nenhum dia', value: 3 }, { text: '1-2 dias', value: 2 }, { text: '3-4 dias', value: 1 }, { text: '5 dias ou mais', value: 0 }] },
+            { q: 2, focus: "AF", type: 'radio', text: 'Em uma semana comum, quantos dias você faz pelo menos 30 minutos de atividade física MODERADA ou caminhada? (Ex: caminhar rápido, pedalar leve, dançar, serviços domésticos mais ativos - que aumentam LEVEMENTE a respiração/batimentos)', options: [{ text: 'Nenhum dia', value: 3 }, { text: '1-2 dias', value: 2 }, { text: '3-4 dias', value: 1 }, { text: '5 dias ou mais', value: 0 }] },
+            { q: 3, focus: "AF", type: 'radio', text: 'Em um dia comum da semana, quanto tempo você passa sentado(a) (trabalhando, estudando, assistindo TV, usando computador/celular - sem incluir o tempo dormindo)?', options: [{ text: '10 horas ou mais', value: 3 }, { text: 'Entre 7 e 9 horas', value: 2 }, { text: 'Entre 4 e 6 horas', value: 1 }, { text: 'Menos de 4 horas', value: 0 }] },
+            { q: 4, focus: "AF", type: 'radio', text: 'Se você não é tão ativo(a) quanto gostaria, qual o principal motivo? Marque apenas uma opção.', options: [{ text: 'Falta de tempo', value: 4, id: 'falta_tempo' }, { text: 'Falta de motivação / Cansaço / Desânimo', value: 4, id: 'falta_motivacao' }, { text: 'Dores / Limitação física', value: 4, id: 'dores_limitacao' }, { text: 'Falta de ar', value: 4, id: 'apneia_limitacao' }, { text: 'Falta de dinheiro / Acesso a locais seguros', value: 4, id: 'falta_dinheiro' }, { text: 'Não gosto de exercício / Acho chato', value: 4, id: 'nao_gosto' }, { text: 'Já sou suficientemente ativo(a)', value: 0, id: 'suf_ativo' }] },
+
+            // Foco 2: Alimentação
+            { q: 5, focus: "AL", type: 'radio', text: 'Com que frequência você consome alimentos ultraprocessados (ex: refrigerantes, salgadinhos, biscoitos recheados, macarrão instantâneo)?', options: [{ text: 'Todos ou quase todos os dias', value: 3 }, { text: '4 a 6 vezes por semana', value: 2 }, { text: '1 a 3 vezes por semana', value: 1 }, { text: 'Raramente ou nunca', value: 0 }] },
+            { q: 6, focus: "AL", type: 'radio', text: 'Com que frequência você consome frutas, legumes ou verduras?', options: [{ text: 'Raramente ou nunca', value: 3 }, { text: 'Alguns dias na semana', value: 2 }, { text: 'Na maioria dos dias, mas não em todas refeições', value: 1 }, { text: 'Diariamente, na maioria das refeições', value: 0 }] },
+            { q: 7, focus: "AL", type: 'radio', text: 'Com que frequência você consome bebidas açucaradas (refrigerantes, sucos de caixa, achocolatados, café com açúcar)?', options: [{ text: 'Todos ou quase todos os dias', value: 3 }, { text: '4 a 6 vezes por semana', value: 2 }, { text: '1 a 3 vezes por semana', value: 1 }, { text: 'Raramente ou nunca', value: 0 }] },
+            { q: 8, focus: "AL", type: 'radio', text: 'Quantos copos de água pura você bebe por dia? Considere que cada copo equivale a 200 ml de água.', options: [{ text: '0 a 3 copos (menos de 600 ml)', value: 3 }, { text: '4 a 7 copos (entre 600 ml e 1,4 l)', value: 2 }, { text: '8 a 10 copos (entre 1,6 e 2 litros)', value: 1 }, { text: 'Mais de 10 copos (mais do que 2 litros)', value: 0 }] },
+            { q: 9, focus: "AL", type: 'radio', text: 'Você costuma comer (ou comer mais) em resposta a situações como: ver um anúncio de comida, sentir um cheiro bom, estar em um evento social com comida disponível, mesmo sem fome real?', options: [{ text: 'Quase sempre', value: 3 }, { text: 'Frequentemente', value: 2 }, { text: 'Às vezes', value: 1 }, { text: 'Nunca ou raramente', value: 0 }] },
+            { q: 10, focus: "AL", type: 'radio', text: 'Você sente que perde o controle sobre o que ou o quanto come?', options: [{ text: 'Quase sempre', value: 5 }, { text: 'Frequentemente', value: 3 }, { text: 'Às vezes', value: 1 }, { text: 'Nunca ou raramente', value: 0 }] },
+
+            // Foco 3: Saúde Mental
+            { q: 11, focus: "SM", type: 'radio', text: 'Nas últimas 2 semanas, com que frequência você se sentiu triste, deprimido(a) ou sem esperança?', options: [{ text: 'Todos os dias', value: 6 }, { text: 'Quase todos os dias', value: 4 }, { text: 'Metade dos dias', value: 2 }, { text: 'Poucos dias', value: 1 }, { text: 'Nenhuma vez', value: 0 }] },
+            { q: 12, focus: "SM", type: 'radio', text: 'Nas últimas 2 semanas, com que frequência você se sentiu nervoso(a), ansioso(a) ou muito preocupado(a)?', options: [{ text: 'Todos os dias', value: 6 }, { text: 'Quase todos os dias', value: 4 }, { text: 'Metade dos dias', value: 2 }, { text: 'Poucos dias', value: 1 }, { text: 'Nenhuma vez', value: 0 }] },
+            { q: 13, focus: "SM", type: 'radio', text: 'Como você se sente em relação à sua aparência física atualmente?', options: [{ text: 'Muito insatisfeito(a)', value: 4 }, { text: 'Insatisfeito(a)', value: 3 }, { text: 'Neutro / Indiferente', value: 2 }, { text: 'Satisfeito(a)', value: 1 }, { text: 'Muito satisfeito(a)', value: 0 }] },
+            { q: 14, focus: "SM", type: 'radio', text: 'No seu dia a dia atual, com que frequência você se sente estressado(a) ou sobrecarregado(a)?', options: [{ text: 'Todos os dias', value: 4 }, { text: 'Quase sempre', value: 3 }, { text: 'Metade dos dias', value: 2 }, { text: 'Poucas vezes', value: 1 }, { text: 'Raramente ou nunca', value: 0 }] },
+            { q: 15, focus: "SM", type: 'radio', text: 'Em geral, como você avalia a qualidade do seu sono?', options: [{ text: 'Péssima (durmo muito pouco e/ou meu sono não é reparador)', value: 6 }, { text: 'Ruim (durmo mal, acordo cansado ou tenho insônia frequente)', value: 4 }, { text: 'Mais ou menos (tenho dificuldade em algumas noites ou não descanso bem)', value: 2 }, { text: 'Boa (demoro a dormir ou acordo à noite, mas descanso)', value: 1 }, { text: 'Ótima (durmo bem e acordo descansado)', value: 0 }] },
+            { q: 16, focus: "SM", type: 'checkbox', text: 'Quais das seguintes estratégias você já utilizou para perder peso por pelo menos 3 meses? (Marque todas que se aplicam)', options: [{ text: 'Dietas muito restritivas', value: 1, id: 'dieta' }, { text: 'Remédios para emagrecer (com ou sem receita)', value: 1, id: 'remedio' }, { text: 'Chás ou compostos "naturais" para emagrecer', value: 1, id: 'chas' }, { text: 'Cirurgia bariátrica', value: 1, id: 'bariatrica' }, { text: 'Exercício físico', value: 1, id: 'exercicio' }, { text: 'Nenhuma dessas', value: 0, id: 'nenhumatentativa' }] },
+            { q: 17, focus: "SM", type: 'radio', text: 'Comida é uma fonte de conforto ou uma recompensa para você, principalmente quando se sente triste, ansioso(a), frustrado(a) ou entediado(a)?', options: [{ text: 'Todos os dias', value: 4 }, { text: 'Quase sempre', value: 3 }, { text: 'Metade das vezes', value: 2 }, { text: 'Poucas vezes', value: 1 }, { text: 'Nunca ou raramente', value: 0 }] },
+
+            // Foco 4: Metabolismo / Genética
+            { q: 18, focus: "MG", type: 'radio', text: 'Seus pais ou irmãos têm ou tiveram obesidade?', options: [{ text: 'Sim, e eu também tive obesidade na infância', value: 3 }, { text: 'Sim, ambos os pais ou vários irmãos', value: 2 }, { text: 'Sim, um dos pais ou algum irmão', value: 1 }, { text: 'Não que eu saiba / Apenas parentes distantes', value: 0 }] },
+            { q: 19, focus: "MG", type: 'checkbox', text: 'Você tem diagnóstico de alguma das seguintes condições? (Marque todas que se aplicam)', options: [{ text: 'Hipotireoidismo', value: 2, id: 'hipotireoidismo' }, { text: 'Síndrome dos Ovários Policísticos (SOP)', value: 2, id: 'sop' }, { text: 'Diabetes (Tipo 1 ou 2)', value: 2, id: 'diabetes' }, { text: 'Hipertensão arterial', value: 0, id: 'hipertensao' }, { text: 'Asma / DPOC', value: 2, id: 'asma_dpoc' }, { text: 'Apneia do Sono', value: 2, id: 'apneia' }, { text: 'Menopausa', value: 2, id: 'menopausa' }, { text: 'Fibromialgia / Dor crônica', value: 2, id: 'fibromialgia' }, { text: 'Não sei se tenho', value: 4, id: 'desconhecediagnostico' }, { text: 'Não possuo nenhuma dessas doenças', value: 0, id: 'semdiagnostico' }] },
+            { q: 20, focus: "MG", type: 'radio', text: 'Você usa continuamente alguma medicação que possa aumentar o peso (ex: corticoides, alguns antidepressivos, antipsicóticos etc)?', options: [{ text: 'Sim, uso uma ou mais', value: 4 }, { text: 'Não tenho certeza', value: 1 }, { text: 'Não', value: 0 }] },
+            { q: 21, focus: "MG", type: 'radio', text: 'Você sente que tem mais dificuldade para perder peso do que a maioria das pessoas, mesmo se esforçando?', options: [{ text: 'Sim', value: 6 }, { text: 'Não', value: 0 }] },
+
+            // Extra: Motivação
+            { q: 22, focus: "Extra", type: 'radio-scale', text: 'Em uma escala de 0 (nenhuma) a 10 (muito importante), o quão importante é para você, NESTE MOMENTO, mudar seus hábitos e seu peso?', options: Array.from({ length: 11 }, (_, i) => ({ text: i.toString(), value: i })) },
+            { q: 23, focus: "Extra", type: 'radio-scale', text: 'Em uma escala de 0 (nenhuma) a 10 (totalmente confiante), o quão confiante você se sente de que consegue fazer as mudanças necessárias?', options: Array.from({ length: 11 }, (_, i) => ({ text: i.toString(), value: i })) },
+            { q: 24, focus: "Extra", type: 'radio', text: 'Qual a sua principal motivação para querer mudar?', options: [{ text: 'Melhorar a saúde / Evitar doenças', value: 'saude' }, { text: 'Melhorar a disposição / Energia', value: 'disposicao' }, { text: 'Melhorar a aparência / Autoestima', value: 'estetica' }, { text: 'Recomendação médica', value: 'medica' }, { text: 'Outro', value: 'outro' }] },
+        ];
+
+        // --- LÓGICA DO QUESTIONÁRIO ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('iamo-form');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const submitBtn = document.getElementById('submit-btn');
+            const restartBtn = document.getElementById('restart-btn');
+            const pdfBtn = document.getElementById('pdf-btn');
+
+            let currentStep = 0;
+            const totalSteps = 2; // 0 para dados iniciais, 1 para questões
+            let currentChart = null;
+
+            function createQuestionHTML(question) {
+                const questionWrapper = document.createElement('div');
+                questionWrapper.className = 'py-6 border-t';
+
+                const questionHeader = document.createElement('div');
+                questionHeader.className = 'flex items-start gap-4 mb-4';
+                questionHeader.innerHTML = `
+                <div class="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-md">${question.q}</div>
+                <p class="text-md font-semibold text-gray-800 flex-grow mt-1">${question.text}</p>
+            `;
+                questionWrapper.appendChild(questionHeader);
+
+                const optionsWrapper = document.createElement('div');
+                optionsWrapper.className = 'pl-12';
+
+                if (question.type === 'radio-scale') {
+                    optionsWrapper.className += ' flex flex-wrap gap-2 items-center';
+                    const legendMin = document.createElement('span');
+                    legendMin.className = 'text-sm text-gray-500 mr-2';
+                    legendMin.textContent = '0 (Nenhuma)';
+                    optionsWrapper.appendChild(legendMin);
+
+                    const scaleContainer = document.createElement('div');
+                    scaleContainer.className = 'flex flex-grow justify-center gap-1';
+
+                    question.options.forEach((opt) => {
+                        const optionId = `q${question.q}_${opt.value}`;
+                        const radioWrapper = document.createElement('div');
+                        radioWrapper.innerHTML = `
+                        <input type="radio" id="${optionId}" name="q${question.q}" value="${opt.value}" data-score="${opt.value}" class="scale-radio hidden">
+                        <label for="${optionId}" class="w-10 h-10 flex items-center justify-center border rounded-lg cursor-pointer transition-colors duration-200 hover:bg-gray-100">${opt.text}</label>
+                    `;
+                        scaleContainer.appendChild(radioWrapper);
+                    });
+                    optionsWrapper.appendChild(scaleContainer);
+
+                    const legendMax = document.createElement('span');
+                    legendMax.className = 'text-sm text-gray-500 ml-2';
+                    legendMax.textContent = '10 (Totalmente)';
+                    optionsWrapper.appendChild(legendMax);
+
+                } else {
+                    optionsWrapper.className += ' space-y-3';
+                    question.options.forEach((opt, index) => {
+                        const optionId = `q${question.q}_${index}`;
+                        const optionDiv = document.createElement('div');
+                        optionDiv.innerHTML = `
+                        <label for="${optionId}" class="flex items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                            <input type="${question.type}" id="${optionId}" name="q${question.q}" value="${opt.id || opt.value}" data-score="${question.type === 'radio' ? opt.value : ''}" class="${question.type === 'radio' ? 'form-radio-custom' : 'form-checkbox-custom'} h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                            <span class="ml-3 text-sm text-gray-700">${opt.text}</span>
+                        </label>
+                    `;
+                        optionsWrapper.appendChild(optionDiv);
+                    });
+                }
+
+                questionWrapper.appendChild(optionsWrapper);
+                return questionWrapper;
+            }
+
+            function setupQuestions() {
+                const questionsWrapper = document.getElementById('questions-wrapper');
+                questions.forEach(q => {
+                    questionsWrapper.appendChild(createQuestionHTML(q));
+                });
+            }
+
+            const steps = () => document.querySelectorAll('.step');
+
+            function updateUI() {
+                steps().forEach((step, index) => {
+                    step.classList.toggle('active', index === currentStep);
+                });
+
+                prevBtn.disabled = currentStep === 0;
+                nextBtn.style.display = currentStep === totalSteps - 1 ? 'none' : 'inline-block';
+                submitBtn.style.display = currentStep === totalSteps - 1 ? 'flex' : 'none'; // Mudado para flex para alinhar spinner
+                nextBtn.textContent = currentStep === 0 ? "Iniciar Questionário" : "Próximo";
+            }
+
+            function validateStep() {
+                if (currentStep === 0) {
+                    const required = ['idade', 'sexo', 'peso', 'altura', 'tabagismo', 'etilismo', 'escolaridade', 'transporte'];
+                    let isValid = true;
+                    required.forEach(field => {
+                        const el = form.querySelector(`[name="${field}"]`);
+                        if (!el.value) {
+                            el.classList.add('border-red-500');
+                            isValid = false;
+                        } else {
+                            el.classList.remove('border-red-500');
+                        }
+                    });
+                    if (!isValid) alert("Por favor, preencha todos os campos obrigatórios.");
+                    return isValid;
+                }
+                return true;
+            }
+
+            nextBtn.addEventListener('click', () => {
+                if (!validateStep()) return;
+                if (currentStep < totalSteps - 1) {
+                    currentStep++;
+                    updateUI();
+                    window.scrollTo(0, 0);
+                }
+            });
+
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) {
+                    currentStep--;
+                    updateUI();
+                    window.scrollTo(0, 0);
+                }
+            });
+
+            // --- LÓGICA DE SUBMISSÃO MODIFICADA PARA FIREBASE ---
+            submitBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                
+                // UX: Loading State
+                const originalBtnText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<div class="loader"></div> Processando...';
+                
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+
+                questions.filter(q => q.type === 'checkbox').forEach(q => {
+                    data[`q${q.q}`] = formData.getAll(`q${q.q}`);
+                });
+
+                // Calcula os scores primeiro
+                const scores = calculateScores(data);
+                
+                // Prepara objeto para salvar (igual ao export manual)
+                const objectToSave = {
+                    timestamp: new Date().toISOString(),
+                    dados_iniciais: { 
+                        nome: data.nome, 
+                        idade: data.idade, 
+                        sexo: data.sexo, 
+                        peso: data.peso, 
+                        altura: data.altura, 
+                        tabagismo: data.tabagismo, 
+                        etilismo: data.etilismo, 
+                        ocupacao: data.ocupacao, 
+                        horas_trabalho: data.horas_trabalho, 
+                        transporte: data.transporte, 
+                        escolaridade: data.escolaridade,
+                        preparaRefeicoes: data.preparaRefeicoes
+                    },
+                    respostas: data,
+                    scores_percentual: scores
+                };
+
+                // Tenta salvar no Firebase
+                let saved = false;
+                if (window.salvarRespostasFirebase) {
+                    saved = await window.salvarRespostasFirebase(objectToSave);
+                }
+
+                const statusMsg = document.getElementById('save-status-msg');
+                if (saved) {
+                    statusMsg.textContent = "Dados salvos com segurança.";
+                    statusMsg.className = "text-center mt-4 text-sm text-green-600";
+                } else {
+                    statusMsg.textContent = "Dados processados localmente.";
+                    statusMsg.className = "text-center mt-4 text-sm text-gray-500";
+                }
+
+                // Restaura botão e mostra resultados
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+
+                showResultsUI(scores, data);
+                window.scrollTo(0, 0);
+            });
+
+            restartBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
+
+            function calculateScores(data) {
+                const scores = { AF: 0, AL: 0, SM: 0, MG: 0 };
+                const maxScores = { AF: 13, AL: 20, SM: 43, MG: 41 };
+
+                // Processa botões de Rádio e Escala
+                questions.filter(q => q.type === 'radio' || q.type === 'radio-scale').forEach(q => {
+                    const selectedOption = document.querySelector(`input[name="q${q.q}"]:checked`);
+                    if (selectedOption && q.focus !== 'Extra') {
+                        const score = parseInt(selectedOption.dataset.score, 10) || 0;
+                        scores[q.focus] += score;
+                    }
+                });
+
+                // Processa Checkboxes
+                questions.filter(q => q.type === 'checkbox').forEach(q => {
+                    const values = data[`q${q.q}`] || [];
+                    let questionScore = 0;
+                    values.forEach(value => {
+                        const option = q.options.find(opt => opt.id === value);
+                        if (option) { questionScore += option.value; }
+                    });
+                    if (q.q === 19) { questionScore = Math.min(questionScore, 10); }
+
+                    if (q.focus !== 'Extra') {
+                        scores[q.focus] += questionScore;
+                    }
+                });
+
+                // Regras especiais de pontuação
+                if (data.q4 === 'falta_motivacao') scores.SM += 4;
+                if (data.q4 === 'dores_limitacao') scores.MG += 4;
+                const q15score = parseInt(data.q15 || '0', 10);
+                scores.MG += q15score;
+
+                const finalScores = {
+                    AF: Math.round((scores.AF / maxScores.AF) * 100),
+                    AL: Math.round((scores.AL / maxScores.AL) * 100),
+                    SM: Math.round((scores.SM / maxScores.SM) * 100),
+                    MG: Math.round((scores.MG / maxScores.MG) * 100)
+                };
+
+                if (data.q11 === '6') {
+                    finalScores.SM = Math.max(finalScores.SM, 80);
+                }
+                if (data.q18 === '3') {
+                    finalScores.MG = Math.max(finalScores.MG, 70);
+                }
+                
+                return finalScores;
+            }
+
+            function showResultsUI(scores, data) {
+                 const reportData = generateReport(scores, data);
+                 
+                 // Configura Botão de PDF
+                 pdfBtn.onclick = () => generatePDF();
+                 
+                 // Configura Botão de Exportar Manual (Backup)
+                 document.getElementById('export-btn').onclick = () => exportData(scores, data);
+
+                 displayResults(scores, data, reportData);
+            }
+
+            function generateStrengths(data) {
+                const strengths = [];
+                if (data.q8 <= 1) {
+                    strengths.push({
+                        icon: '💧',
+                        title: 'Excelente hidratação',
+                        text: 'Existe um ótimo nível de hidratação. Este é um dos hábitos mais importantes para a saúde metabólica e o bom funcionamento do corpo.'
+                    });
+                }
+                if (data.q1 <= 2 || data.q2 <= 1) {
+                    strengths.push({
+                        icon: '💪',
+                        title: 'Atividade física regular',
+                        text: 'Há o hábito de se movimentar regularmente, o que é uma grande vantagem e um passo muito importante. O objetivo pode ser pensar em como otimizar ou adicionar mais variedade a essa prática já conquistada.'
+                    });
+                }
+                if (data.preparaRefeicoes === 'eu_mesmo' || data.preparaRefeicoes === 'familia') {
+                    strengths.push({
+                        icon: '🍳',
+                        title: 'Controle sobre o preparo dos alimentos',
+                        text: 'O fato de preparar as próprias refeições (ou ter alguém da família que o faça) é uma grande vantagem, permitindo total controle sobre os ingredientes e a forma de preparo. Pode-se explorar receitas práticas e saudáveis.'
+                    });
+                }
+                if (data.q7 === 0) {
+                    strengths.push({
+                        icon: '👍',
+                        title: 'Poucas bebidas açucaradas',
+                        text: 'Ótimo hábito de evitar bebidas açucaradas, uma das medidas de maior impacto positivo para a saúde metabólica. Manter essa escolha é uma grande vitória no dia a dia.'
+                    });
+                }
+                if (data.transporte === 'a_pe_bicicleta') {
+                    strengths.push({
+                        icon: '🚲',
+                        title: 'Transporte ativo',
+                        text: 'Utilizar transporte ativo, como caminhar ou andar de bicicleta, é uma excelente forma de incorporar mais movimento ao dia a dia, beneficiando a saúde cardiovascular e metabólica.'
+                    });
+                }
+                if (data.q4 === 'suf_ativo') {
+                    strengths.push({
+                        icon: '🏋️‍♂️',
+                        title: 'Percepção de atividade suficiente',
+                        text: 'Há uma percepção positiva sobre o nível de atividade física, indicando que já existe um bom hábito estabelecido. Manter esse nível é importante para a saúde geral.'
+                    });
+                }
+                if (data.q5 <= 1 && data.q6 <= 1 && data.q7 <= 1) {
+                    strengths.push({
+                        icon: '🥗',
+                        title: 'Padrão alimentar saudável',
+                        text: 'Há um padrão alimentar saudável, com baixo consumo de ultraprocessados e bebidas açucaradas, e boa ingestão de frutas, legumes e verduras. Manter esses hábitos é fundamental para a saúde geral.'
+                    });
+                }
+                if (data.q24 === 'saude' || data.q24 === 'disposicao') {
+                    strengths.push({
+                        icon: '💖',
+                        title: 'Motivação voltada para saúde e disposição',
+                        text: 'A motivação principal para mudança está focada na melhoria da saúde ou da energia, o que é um excelente ponto de partida para adotar hábitos mais saudáveis e sustentáveis.'
+                    });
+                }
+                if (data.q22 >= 7 && data.q23 >= 7) {
+                    strengths.push({
+                        icon: '🚀',
+                        title: 'Pronto para a ação',
+                        text: 'Há uma alta motivação e confiança para fazer mudanças, o que é um excelente ponto de partida para adotar hábitos mais saudáveis e sustentáveis.'
+                    });
+                }
+                if (data.q15 <= 1) {
+                    strengths.push({
+                        icon: '😴',
+                        title: 'Boa qualidade do sono',
+                        text: 'Há uma boa qualidade do sono, o que é fundamental para a saúde mental e física. Manter esse hábito contribui significativamente para o bem-estar geral.'
+                    });
+                }
+                return strengths;
+            }
+
+            function displayResults(scores, data, reportData) {
+                document.getElementById('questionnaire-container').classList.add('hidden');
+                document.getElementById('results-container').classList.remove('hidden');
+                document.getElementById('patient-name-report').textContent = data.nome || 'Paciente';
+
+                const scoreSummary = document.getElementById('score-summary');
+                scoreSummary.innerHTML = '';
+                const reportContent = document.getElementById('report-content');
+                reportContent.innerHTML = '';
+
+                // Renderiza o visualizador de IMC
+                const imcVisualizerContainer = document.getElementById('imc-visualizer');
+                if (reportData.imc) {
+                    const imcValue = parseFloat(reportData.imc);
+                    const minIMC = 15, maxIMC = 45;
+                    let imcPercent = ((imcValue - minIMC) / (maxIMC - minIMC)) * 100;
+                    imcPercent = Math.max(0, Math.min(100, imcPercent));
+
+                    imcVisualizerContainer.innerHTML = `
+                    <div class="bg-gray-50 p-4 rounded-lg shadow-inner">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-3 text-center">Classificação do IMC</h4>
+                        <div class="relative w-full pt-8 pb-6 px-2">
+                            <div class="h-3 rounded-full bg-gradient-to-r from-blue-300 via-yellow-300 to-red-400"></div>
+                            <div id="imc-marker" class="absolute top-0 transition-all duration-500" style="left: ${imcPercent}%;">
+                                <div class="relative flex flex-col items-center">
+                                    <div class="bg-gray-800 text-white text-sm font-bold px-2 py-1 rounded-md -mt-1 shadow-lg">${reportData.imc}</div>
+                                    <div class="w-2 h-2 bg-gray-800 transform rotate-45 -mt-1"></div>
+                                    <div class="w-0.5 h-3 bg-gray-800"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-2 -mx-2">
+                                <span class="w-1/4 text-center">Normal</span>
+                                <span class="w-1/4 text-center">Sobrepeso</span>
+                                <span class="w-1/4 text-center">Obesidade I</span>
+                                <span class="w-1/4 text-center">Obesidade II+</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                    document.getElementById('imc-marker').style.transform = 'translateX(-50%)';
+                }
+
+                // Renderiza as barras de progresso dos focos
+                const focusNames = { AF: 'Atividade Física', AL: 'Alimentação', SM: 'Saúde Mental', MG: 'Metabolismo/Genética' };
+                const focusColors = { AF: 'green', AL: 'yellow', SM: 'blue', MG: 'orange' };
+                Object.entries(scores).forEach(([key, value]) => {
+                    const color = focusColors[key];
+                    const isHigh = value > 60;
+                    const scoreEl = document.createElement('div');
+                    scoreEl.className = 'mb-3';
+                    scoreEl.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-semibold text-sm text-gray-700">${focusNames[key]}</span>
+                        <span class="font-bold text-lg ${isHigh ? `text-${color}-600` : `text-${color}-600`}">${value}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                        <div class="${isHigh ? `bg-${color}-500` : `bg-${color}-500`} h-4 rounded-full" style="width: ${value}%"></div>
+                    </div>
+                `;
+                    scoreSummary.appendChild(scoreEl);
+                });
+
+                // Renderiza o Gráfico Radar
+                const ctx = document.getElementById('radarChart').getContext('2d');
+                if (currentChart) {
+                    currentChart.destroy();
+                }
+                currentChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['AF', 'AL', 'SM', 'MG'],
+                        datasets: [{
+                            label: 'Pontuação do Foco (%)',
+                            data: Object.values(scores),
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                            pointBorderColor: '#fff',
+                        }]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        scales: { r: { suggestedMin: 0, suggestedMax: 100, pointLabels: { font: { size: 14, weight: '500' } } } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+
+                // --- CONSTRUÇÃO DO RELATÓRIO ---
+                let finalHTML = '';
+
+                // 2. DIAGNÓSTICO MULTIFATORIAL
+                if (reportData.narrative) {
+                    finalHTML += `
+                <div id="narrative-section">
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-800 border-b pb-2">Diagnóstico Multifatorial</h3>
+                    <div class="bg-gray-50 p-5 rounded-lg shadow-inner">
+                        <p class="text-gray-700 leading-relaxed">${reportData.narrative}</p>
+                    </div>
+                </div>
+                `;
+                }
+
+                // 3. PONTOS FORTES
+                const strengths = generateStrengths(data);
+                if (strengths.length > 0) {
+                    let strengthsHTML = `<div id="strengths-section">
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-800 border-b pb-2">Pontos Fortes</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                    strengths.forEach(strength => {
+                        strengthsHTML += `
+                        <div class="bg-green-50 border border-green-200 p-4 rounded-lg flex items-start gap-4">
+                            <span class="text-2xl">${strength.icon}</span>
+                            <div>
+                                <p class="font-semibold text-green-800">${strength.title}</p>
+                                <p class="text-sm text-green-700">${strength.text}</p>
+                            </div>
+                        </div>
+                    `;
+                    });
+                    strengthsHTML += `</div></div>`;
+                    finalHTML += strengthsHTML;
+                }
+
+                // 4. SINAIS DE ALERTA (Expansível)
+                if (reportData.alerts.length > 0) {
+                    finalHTML += `
+                    <div id="alerts-section" class="bg-red-50 border border-red-200 rounded-lg">
+                        <button class="collapsible-trigger w-full flex justify-between items-center p-4 text-left">
+                            <h3 class="text-xl font-semibold text-red-800">Sinais de Alerta</h3>
+                            <svg class="arrow-icon w-6 h-6 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="collapsible-content">
+                            <div class="px-4 pb-4 space-y-3">
+                            ${reportData.alerts.map(item => `
+                                <div class="bg-white p-3 rounded-md shadow-sm">
+                                    <p class="font-semibold text-red-700">${item.title}</p>
+                                    <p class="text-sm text-gray-600">${item.text}</p>
+                                </div>
+                            `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                }
+
+                // 5. ORIENTAÇÕES (Expansível)
+                if (reportData.orientations.length > 0) {
+                    finalHTML += `
+                    <div id="orientations-section" class="bg-blue-50 border border-blue-200 rounded-lg">
+                        <button class="collapsible-trigger w-full flex justify-between items-center p-4 text-left">
+                            <h3 class="text-xl font-semibold text-blue-800">Orientações</h3>
+                            <svg class="arrow-icon w-6 h-6 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="collapsible-content">
+                             <div class="px-4 pb-4 space-y-3">
+                                ${reportData.orientations.map(item => `
+                                    <div class="bg-white p-3 rounded-md shadow-sm">
+                                        <p class="font-semibold text-blue-700">${item.title}</p>
+                                        <p class="text-sm text-gray-600">${item.text}</p>
+                                    </div>
+                                `).join('')}
+                                ${reportData.professionals.size > 0 ? `
+                                    <div class="bg-white p-3 rounded-md shadow-sm mt-4">
+                                        <p class="font-semibold text-gray-800">Profissionais que podem ajudar:</p>
+                                        <p class="text-sm text-gray-600">${Array.from(reportData.professionals).join(' • ')}</p>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                }
+
+                // 6. METAS
+                finalHTML += `
+                <div id="goals-section">
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-800 border-b pb-2">Metas Iniciais</h3>
+                    <div class="bg-purple-50 p-5 rounded-lg shadow-inner space-y-4">
+                        <div>
+                            <label for="meta1" class="block text-sm font-medium text-gray-700">Meta 1 (algo pequeno e prático para a próxima semana):</label>
+                            <textarea id="meta1" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm" placeholder="Ex: Caminhar 15 minutos após o almoço na segunda, quarta e sexta."></textarea>
+                        </div>
+                         <div>
+                            <label for="meta2" class="block text-sm font-medium text-gray-700">Meta 2 (opcional):</label>
+                            <textarea id="meta2" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm" placeholder="Ex: Adicionar uma porção de fruta no café da manhã todos os dias."></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+                reportContent.innerHTML = finalHTML;
+
+                // Adiciona funcionalidade aos botões expansíveis
+                document.querySelectorAll('.collapsible-trigger').forEach(trigger => {
+                    trigger.addEventListener('click', () => {
+                        const content = trigger.nextElementSibling;
+                        const arrow = trigger.querySelector('.arrow-icon');
+                        content.classList.toggle('expanded');
+                        arrow.classList.toggle('expanded');
+                    });
+                });
+
+            }
+
+            function generateReport(scores, data) {
+                let alerts = [];
+                let orientations = [];
+                let professionals = new Set();
+                const imc = data.peso && data.altura ? (data.peso / (data.altura * data.altura)).toFixed(2) : null;
+
+                // --- GERA A NARRATIVA ---
+                const narrative = generateNarrative(scores, data);
+
+                // --- LÓGICA DE ALERTAS E ORIENTAÇÕES ---
+                const hasDepressiveSymptoms = parseInt(data.q11, 10) >= 4;
+                const hasAnxietySymptoms = parseInt(data.q12, 10) >= 4;
+                const hasPoorSleep = parseInt(data.q15, 10) >= 3;
+                const hasTriedManyThings = data.q16 && data.q16.length >= 3;
+                const motivationDiscrepancy = parseInt(data.q22, 10) > 7 && parseInt(data.q23, 10) < 5;
+                const gatilhoFibromialgia = data.q19?.includes('desconhecediagnostico') && data.q11 >= '4' && data.q4 === 'dores_limitacao'
+
+                // --- SINAIS DE ALERTA ---
+
+                if (parseFloat(imc) >= 40) {
+                    alerts.push({ title: 'Obesidade grau III', text: 'O IMC indica obesidade grau III, o que está associado a um risco significativamente aumentado de complicações de saúde. É essencial uma avaliação médica detalhada para planejamento de intervenções adequadas.' });
+                    professionals.add('Médico de Família').add('Endocrinologista');
+                }
+                if (data.escolaridade === 'sem_escolaridade' || data.escolaridade === 'fundamental_incompleto') {
+                    alerts.push({ title: 'Barreira de letramento', text: 'O baixo nível educacional pode dificultar a compreensão e adesão a orientações de saúde. Estratégias de comunicação simplificadas, com checagem de entendimento, e apoio adicional podem ser necessários para garantir o sucesso do tratamento.' });
+                    professionals.add('Assistente Social').add('Agente Comunitário de Saúde');
+                }
+                if (data.preparaRefeicoes === 'delivery') {
+                    alerts.push({ title: 'Dependência de delivery', text: 'A falta de preparo das próprias refeições dificulta o controle de ingredientes, porções e custos. Risco aumentado de consumo de ultraprocessados e gorduras.' });
+                    professionals.add('Nutricionista');
+                }
+                if (data.q1 === 3 && data.q2 === 3) {
+                    alerts.push({ title: 'Sedentarismo severo', text: 'O nível de atividade física é extremamente baixo, o que impacta negativamente a saúde metabólica e cardiovascular. Uma avaliação médica é recomendada antes de iniciar qualquer programa de exercícios.' });
+                    professionals.add('Médico de Família').add('Educador Físico');
+                }
+                if (data.q3 === 3) {
+                    alerts.push({ title: 'Alto tempo sedentário diário', text: 'O tempo prolongado em atividades sedentárias (mais que 10 horas sentado) é um fator de risco independente para várias condições metabólicas e cardiovasculares, mesmo para quem se exercita. Estratégias para reduzir o tempo sentado e incorporar pausas ativas são essenciais.' });
+                    professionals.add('Educador Físico').add('Médico de Família');
+                }
+                if (data.q4 === 'dores_limitacao') {
+                    alerts.push({ title: 'Barreira física ao exercício', text: 'Presença de dores ou limitações físicas como principal barreira para a atividade física. É crucial uma avaliação médica e/ou fisioterápica para investigar a causa, garantir um diagnóstico correto e encontrar modalidades de exercício seguras e adaptadas.' });
+                    professionals.add('Médico de Família').add('Fisioterapeuta');
+                }
+                if (data.q4 === 'nao_gosto') {
+                    alerts.push({ title: 'Barreira afetiva ao exercício', text: 'A falta de gosto ou interesse pela atividade física é uma barreira comum. Estratégias motivacionais, experimentação de diferentes modalidades e apoio psicológico podem ser necessários para superar essa resistência. Abordagens tradicionais ("tem que fazer") tendem a falhar; o foco deve ser em encontrar prazer no movimento.' });
+                    professionals.add('Psicólogo').add('Educador Físico');
+                }
+                if (data.q4 === 'apneia_limitacao' && data.q19?.includes('desconhecediagnostico')) {
+                    alerts.push({ title: 'Investigação respiratória', text: 'Foi relatado que a falta de ar é uma barreira para o exercício físico. Pode-se tratar apenas de pouco condicionamento físico, porém é interessante descartar a possibilidade de doenças respiratórias.' });
+                    professionals.add('Médico de Família').add('Pneumologista');
+                }
+                if (data.q19?.includes('apneia') && hasPoorSleep) {
+                    alerts.push({ title: 'Apneia do sono e má qualidade do sono', text: 'A combinação de diagnóstico de apneia do sono e percepção de sono ruim é um grande sinal de alerta. O tratamento inadequado da apneia impacta severamente o metabolismo, aumenta o risco cardiovascular e dificulta o controle do peso. A adesão ao tratamento (ex: CPAP) é prioritária.' });
+                    professionals.add('Médico de Família').add('Especialista em Sono');
+                }
+                if (data.q10 >= 2) {
+                    alerts.push({ title: 'Percepção de perda de controle alimentar', text: 'O relato de perda de controle alimentar frequente pode ser um sinal de transtorno da compulsão alimentar. É um ponto que merece atenção e deve ser avaliado por um profissional de saúde mental e nutricionista com abordagem comportamental.' });
+                    professionals.add('Psicólogo').add('Nutricionista').add('Médico de Família');
+                }
+                if (hasDepressiveSymptoms || hasAnxietySymptoms) {
+                    alerts.push({ title: 'Sintomas significativos de humor/ansiedade', text: 'Foram relatados sintomas de humor deprimido ou ansiedade de forma frequente. Estes sintomas podem impactar profundamente a motivação e os hábitos de vida. Uma avaliação de saúde mental é fortemente recomendada para diagnóstico e tratamento adequados.' });
+                    professionals.add('Psicólogo').add('Psiquiatra');
+                }
+                if (data.q20 === '4') {
+                    alerts.push({ title: 'Uso de medicação com impacto no peso', text: 'O uso contínuo de certas medicações foi indicado. É importante revisar a prescrição com o(a) médico(a) responsável para avaliar se existem alternativas com menor impacto metabólico ou se o manejo do peso precisa de estratégias específicas.' });
+                    professionals.add('Médico de Família').add('Médico Especialista');
+                }
+                if (data.q19?.includes('desconhecediagnostico') && data.q21 === '6') {
+                    alerts.push({ title: "Investigação metabólica recomendada", text: "O paciente relata dificuldade em perder peso e desconhece seu estado de saúde em relação a possíveis doenças metabólicas. Sugere-se solicitar exames laboratoriais (ex: perfil lipídico, glicemia de jejum, TSH) para investigar causas secundárias que possam estar influenciando o ganho de peso." });
+                    professionals.add('Médico de Família');
+                }
+                if (data.q14 >= 3 && data.q5 === '3' && data.q19?.includes('hipertensao')) {
+                    alerts.push({ title: 'Risco cardiometabólico elevado', text: 'A combinação de estresse crônico com alto consumo de ultraprocessados é um potente gatilho para desregulação metabólica e aumento do risco cardiovascular. O manejo do estresse é uma prioridade terapêutica.' });
+                    professionals.add('Psicólogo').add('Nutricionista').add('Médico de Família');
+                }
+                if (data.q19?.includes('sop') && data.q21 === '4') {
+                    alerts.push({ title: "Desafio metabólico específico: Síndrome dos Ovários Policísticos (SOP)", text: "A paciente com SOP e dificuldade percebida em perder peso necessita de uma abordagem direcionada. O tratamento deve focar no controle da resistência à insulina, com orientação nutricional e de atividade física específicas para a condição." });
+                    professionals.add('Médico de Família').add('Nutricionista').add('Endocrinologista');
+                }
+                if (data.q10 > 2 && data.q17 > 2) {
+                    alerts.push({ title: 'Risco de transtorno da compulsão alimentar', text: 'A avaliação evidenciou episódios de perda de controle alimentar combinados com o uso da comida para regulação emocional. Esta combinação é um forte indicativo de possível transtorno da compulsão alimentar, que requer diagnóstico e tratamento específicos antes de focar em dietas ou perda de peso. A abordagem punitiva ou restritiva é contraindicada.' });
+                    professionals.add('Psicólogo').add('Nutricionista').add('Médico de Família').add('Psiquiatra');
+                }
+                if (data.q11 === '6') {
+                    alerts.push({ title: 'Sintomas graves de depressão', text: 'Foram identificados sintomas depressivos de alta frequência e intensidade. Estes sintomas são condições de saúde que precisam de tratamento prioritário, pois impactam diretamente a energia, a motivação e a capacidade de realizar mudanças. O manejo do peso torna-se secundário neste momento.' });
+                    professionals.add('Psiquiatra').add('Psicólogo').add('Médico de Família');
+                }
+                if (data.q15 >= 4) {
+                    alerts.push({ title: 'Privação do sono', text: 'A avaliação indica uma má qualidade do sono severa, o que pode estar associado a distúrbios do sono não diagnosticados (ex: insônia grave, apneia do sono). <strong>A privação crônica de sono é um forte disruptor endócrino</strong>: aumenta a grelina (hormônio que dá a sensação de fome), reduz a leptina (hormônio responsável pela saciedade) e aumenta cortisol (hormônio do estresse, cujos valores elevados e constantes aumentam a glicemia e, consequentemente, o peso). Dificulta muito o emagrecimento.' });
+                    professionals.add('Especialista em Sono').add('Médico de Família').add('Psicólogo');
+                }
+                if (gatilhoFibromialgia) {
+                    alerts.push({ title: "Possibilidade de fibromialgia", text: "A união de sintomas depressivos e limitação para realizar exercícios físicos por dores pode indicar a presença de fibromialgia, portanto recomenda-se investigar essa ou outras causas centrais de dores crônicas." });
+                    professionals.add('Médico de Família').add('Reumatologista');
+                }
+                if (data.q5 >= 2 && data.q6 >= 2 && data.q7 >= 2) {
+                    alerts.push({ title: 'Padrão alimentar de risco', text: 'O padrão alimentar avaliado indica consumo elevado de ultraprocessados, bebidas açucaradas e baixo consumo de frutas, legumes e verduras. Este padrão é inflamatório e está fortemente associado a desregulação metabólica, ganho de peso e aumento do risco cardiovascular. Uma reeducação alimentar é essencial.' });
+                    professionals.add('Nutricionista');
+                }
+                if (data.q14 >= 3) {
+                    alerts.push({ title: 'Estresse crônico elevado', text: 'O nível de estresse percebido é muito alto, o que impacta negativamente a saúde metabólica e dificulta o controle do peso (aumento constante dos níveis séricos de cortisol e possível comprometimento do sono, por exemplo). Estratégias de manejo do estresse, como técnicas de relaxamento e psicoterapia, são recomendadas.' });
+                    professionals.add('Psicólogo').add('Médico de Família');
+                }
+
+                // --- ORIENTAÇÕES ---
+
+                if (imc >= 35 && !data.q16?.includes('bariatrica')) {
+                    let text = `Apesar de não ser a melhor forma de avaliação isoladamente, o Ministério da Saúde preconiza que um indivíduo com IMC de ${imc} `;
+                    if (imc >= 50) {
+                        text += 'deve ser <strong>encaminhado para avaliação de cirurgia bariátrica</strong>, mesmo sem comorbidades ou dois anos de tentativa de tratamento clínico.';
+                    } else if (imc >= 40) {
+                        text += 'deve ser encaminhado para avaliação de cirurgia bariátrica, mesmo sem comorbidades, <strong>caso haja falha em tratamento clínico longitudinal por pelo menos dois anos</strong>.';
+                    } else if (data.q19?.includes('hipertensao') || data.q19?.includes('diabetes') || data.q19?.includes('apneia') && data.q21 === '6') {
+                        text += 'que possui comorbidades associadas (como foi relatado) deve ser encaminhado para avaliação de cirurgia bariátrica, <strong>caso haja falha em tratamento clínico longitudinal por pelo menos dois anos</strong>.';
+                    } else {
+                        text += 'pode considerar a avaliação para cirurgia bariátrica, <strong>caso haja falha em tratamento clínico longitudinal por pelo menos dois anos</strong> e <strong>seja diagnosticada alguma das seguintes comorbidades</strong>: risco cardiovascular maior que 20% em 10 anos, doença cardiovascular, hipertensão arterial de difícil controle, diabetes mellitus de difícil controle, síndrome da apneia e hipopneia obstrutiva do sono ou doença articular degenerativa.';
+                    }
+                    orientations.push({ title: 'Cirurgia bariátrica', text: text });
+                }
+
+                if (data.tabagismo === 'fumante_diario') {
+                    orientations.push({ title: 'Cessação do tabagismo', text: 'O tabagismo é um fator de risco significativo para diversas doenças, incluindo cardiovasculares e respiratórias, e a cessação do tabagismo é a ação isolada de maior impacto na saúde. Oferecer apoio da equipe (grupo de tabagismo, terapia de reposição de nicotina) é prioritário e pode colaborar com a perda de peso.' });
+                    professionals.add('Médico de Família').add('Psicólogo');
+                }
+
+                if ((data.tabagismo === 'ex_fumante' || data.tabagismo === 'fumante_ocasional' || data.tabagismo === 'fumante_diario') && data.q4 === 'apneia_limitacao' && !data.q19?.includes('asma_dpoc')) {
+                    orientations.push({ title: 'Possível Doença Pulmonar Obstrutiva Crônica', text: 'O histórico de tabagismo associado à falta de ar que impede o aumento da atividade física pode indicar a presença de Doença Pulmonar Obstrutiva Crônica (DPOC), que deve ser investigada.' });
+                    professionals.add('Médico de Família').add('Pneumologista');
+                }
+
+                if (scores.AF >= 60) {
+                    let text = 'A pontuação indica que o sedentarismo e o baixo gasto energético são um ponto central. ';
+                    if (data.q3 === "3") text += 'O longo tempo sentado(a) no dia a dia é um fator de risco independente e precisa de ser abordado, quebrando os períodos com pequenas pausas para se movimentar. ';
+
+                    if (data.q4 === 'falta_tempo') {
+                        text += 'A "falta de tempo" é a barreira principal. A estratégia mais eficaz não é pensar em "ir à academia", mas em "acumular movimento" ao longo do dia: usar escadas, descer um ponto de ônibus antes, fazer pausas ativas de 5 minutos no trabalho. O foco é a consistência, não a intensidade.';
+                    } else if (data.q4 === 'nao_gosto') {
+                        text += 'Como foi indicado não gostar de exercícios, o foco deve ser encontrar uma atividade que gere prazer (dança, artes marciais, esportes, caminhadas na natureza) para garantir a adesão. O objetivo é mover o corpo de uma forma que traga alegria, não que seja uma punição.';
+                    } else if (data.q4 === 'falta_motivacao' && (hasDepressiveSymptoms || hasAnxietySymptoms)) {
+                        text += 'A falta de motivação parece estar diretamente ligada aos sintomas de humor/ansiedade. A prioridade é tratar a saúde mental. Atividades leves, como caminhadas curtas, podem inclusive ajudar no tratamento, mas sem pressão por performance.';
+                    } else if (data.q4 === 'apneia_limitacao' && !data.q19?.includes('apneia') && !data.q19?.includes('asma_dpoc')) {
+                        text += 'A maior barreira para ser mais ativo é a falta de ar. Deve-se investigar se há asma, DPOC ou outras condições respiratórias. O tratamento adequado dessas condições é fundamental para conseguir aumentar a atividade física.';
+                    } else {
+                        text += 'Começar com pequenas metas, como incluir caminhadas curtas na rotina, é um ótimo primeiro passo para construir o hábito e a confiança.'
+                    }
+                    orientations.push({ title: 'Estratégias para aumentar a atividade física', text: text });
+                    professionals.add('Educador Físico');
+                }
+
+                if (data.q4 === 'apneia_limitacao' && (data.q19?.includes('apneia') || data.q19?.includes('asma_dpoc'))) {
+                    orientations.push({ title: 'Avaliação respiratória', text: 'A falta de ar como barreira para a atividade física, associada a um diagnóstico prévio de apneia do sono ou de asma/DPOC, indica a necessidade de uma avaliação médica detalhada. O manejo adequado dessas condições respiratórias é crucial para melhorar a capacidade de se exercitar com segurança e conforto.' });
+                    professionals.add('Médico de Família').add('Especialista em Sono').add('Pneumologista');
+                }
+
+                if (data.q4 === 'falta_tempo' && data.horas_trabalho && parseInt(data.horas_trabalho) > 44) {
+                    orientations.push({ title: 'Otimizando a rotina', text: 'Foi identificada uma rotina de trabalho intensa como principal barreira para melhorar a atividade física. O plano de ação deve ser realista e focado em "micro-hábitos": incluir lanches saudáveis planejados, usar escadas no trabalho, e realizar sessões curtas de exercício (10-15 min) nos intervalos possíveis.' });
+                }
+
+                if (data.q8 >= 2) {
+                    orientations.push({ title: 'Aumentar a ingesta hídrica', text: 'Há um consumo diário de água menor que 1,6 litro. Baixa ingesta hídrica prejudica o metabolismo, a saciedade, a função renal e pode aumentar o consumo de bebidas calóricas. É importante aumentar a hidratação, <strong>mesmo sem estar com sede</strong>; uma possibilidade é ativar um lembrete para beber água no celular para alertar a cada hora e criar o hábito de estar sempre com uma garrafa de água por perto, de preferência que contenha uma capacidade de aproximadamente 2 litros.' });
+                }
+
+                if (scores.AL >= 60) {
+                    let text = 'O padrão alimentar parece ser um fator de grande impacto. A base deve ser priorizar "comida de verdade" e reduzir o consumo de ultraprocessados. ';
+                    if (data.q5 >= 2 && data.q3 === "3") {
+                        text += 'A combinação de longos períodos sentado com consumo frequente de ultraprocessados sugere um padrão que precisa de atenção. Planejar lanches saudáveis (frutas, castanhas) pode ajudar a evitar o consumo automático desses produtos. ';
+                    }
+                    if (data.q9 >= 2 && data.q14 >= 3) {
+                        text += 'O estresse parece ser um gatilho importante para o "comer sem fome". Desenvolver outras ferramentas para lidar com o estresse (meditação, hobbies, respiração) é fundamental para que a comida não seja a única válvula de escape. ';
+                    }
+                    if (data.q9 >= 2) {
+                        text += 'Foi identificado que o ambiente e os gatilhos externos (ver comida, cheiros) influenciam as escolhas. Estratégias de "arquitetura de escolhas" podem ajudar: deixar frutas visíveis, não ter ultraprocessados em casa, planejar o que comer antes de ir a eventos sociais.'
+                    }
+                    if (data.q17 >= 2) {
+                        text += 'O uso da comida como conforto emocional é um ponto chave. O trabalho terapêutico deve focar em desenvolver um "cardápio" de outras estratégias não-alimentares para lidar com as emoções (ex: ouvir música, conversar com alguém, caminhar, escrever).'
+                    }
+                    if (data.preparaRefeicoes === 'delivery') {
+                        text += 'O fato de depender de delivery para as refeições principais dificulta o controle sobre os ingredientes e porções. <strong>Aprender a preparar refeições simples</strong> em casa, mesmo que rápidas, pode melhorar significativamente a qualidade da alimentação.';
+                    }
+                    orientations.push({ title: 'Melhorando o padrão alimentar', text: text });
+                    professionals.add('Nutricionista').add('Médico de Família');
+                }
+                if (hasTriedManyThings && data.q10 >= 2) {
+                    orientations.push({ title: 'Ciclo de restrição e perda de controle', text: 'O histórico de múltiplas tentativas de dietas restritivas, combinado com a sensação de perda de controle, sugere que uma abordagem não-prescritiva e focada no comportamento alimentar (como o "comer intuitivo") pode ser mais benéfica do que mais uma dieta. O foco é fazer as pazes com a comida.' });
+                    professionals.add('Nutricionista').add('Psicólogo');
+                }
+
+                if (scores.SM >= 60) {
+                    let text = 'Aspectos emocionais são preponderantes. Cuidar da saúde mental é a base para conseguir realizar outras mudanças de forma sustentável. ';
+                    if (hasPoorSleep && !data.q19?.includes('apneia')) text += 'A <strong>má qualidade do sono</strong>, em particular, tem um impacto direto no humor, nos hormônios da fome e nas escolhas alimentares. A higiene do sono deve ser uma prioridade e aconselha-se investigar a existência de apneia do sono. ';
+                    if (data.q13 >= 2) text += 'A insatisfação com a imagem corporal pode levar a um ciclo de autocrítica e comportamentos restritivos. Trabalhar a aceitação e o respeito pelo corpo é crucial. O método <strong>HAES</strong> (Saúde em Todos os Tamanhos) é uma abordagem que defende que a saúde e o bem-estar podem ser alcançados e mantidos independentemente do peso corporal, focando em comportamentos saudáveis, aceitação do corpo e justiça social em vez da perda de peso como objetivo principal ';
+                    if (data.q14 >= 3) text += 'O <strong>manejo do estresse é uma prioridade</strong>. Aconselha-se investigar fontes de estresse, avaliar Práticas Integrativas (PICS) disponíveis e considerar psicoterapia para desenvolver ferramentas eficazes de enfrentamento. ';
+                    if (data.q16?.includes('dieta')) text += 'O histórico de dietas restritivas pode ter contribuído para uma relação problemática com a comida. Abordagens de <strong>nutrição comportamental</strong>, comer intuitivo, reeducação alimentar sustentável e o respeito aos sinais de fome e saciedade são recomendadas. ';
+                    if (data.q17 >= 3) text += 'O uso da comida como conforto emocional é um ponto chave. O trabalho terapêutico deve focar em desenvolver um "repertório emocional" de outras <strong>estratégias não-alimentares para lidar com as emoções</strong> (ex: ouvir música, conversar com alguém, caminhar, escrever).';
+                    orientations.push({ title: 'Cuidado com a saúde mental', text: text });
+                    professionals.add('Psicólogo').add('Psiquiatra');
+                }
+
+                if (scores.MG >= 60) {
+                    let text = 'Fatores metabólicos, genéticos ou condições de saúde parecem ter uma influência significativa. É fundamental um acompanhamento médico próximo para otimizar o tratamento de condições existentes e definir expectativas realistas para o manejo do peso. ';
+                    if (data.q19?.includes('desconhecediagnostico')) text += 'A investigação de condições metabólicas é uma prioridade para entender melhor os desafios enfrentados. Além da avaliação clínica, pode ser necessário solicitar exames laboratoriais para avaliação detalhada, como <strong>glicemia em jejum, perfil lipídico, insulina em jejum, TSH, TGO e TGP</strong>. ';
+                    if (data.q19?.includes('desconhecediagnostico') && data.sexo === 'feminino') text += 'A investigação deve incluir também a avaliação para <strong>Síndrome dos Ovários Policísticos</strong>, uma condição comum que impacta o metabolismo e o peso em mulheres. ';
+                    if (data.q19?.includes('desconhecediagnostico') && hasPoorSleep) text += 'Considere também solicitar uma <strong>polissonografia</strong> para avaliar a possibilidade de Síndrome da Apneia e Hipopneia Obstrutiva do Sono, que pode afetar significativamente o metabolismo e a capacidade de perder peso. ';
+                    orientations.push({ title: 'Manejo clínico e metabólico', text: text });
+                    professionals.add('Médico de Família').add('Endocrinologista');
+                }
+
+                if (gatilhoFibromialgia || data.q19?.includes('fibromialgia')) {
+                    orientations.push({ title: 'Abordagem multimodal da dor crônica', text: 'O manejo da obesidade passa pelo manejo da dor. Requer abordagem multimodal: exercício físico de baixo impacto, higiene do sono e medicamentos para dor crônica central (como amitriptilina, pregabalina, duloxetina).' });
+                    professionals.add('Médico de Família').add('Reumatologista').add('Fisioterapeuta').add('Psicólogo');
+                }
+
+                if (data.q21 === '6') {
+                    orientations.push({ title: 'Esforço e frustração', text: 'Devemos validar o sentimento de esforço e frustração ("eu me esforço e mesmo assim não emagreço"). Fatores metabólicos/genéticos podem tornar o processo mais lento, mas não impossível. É importante focar em <strong>metas de saúde e não só de peso</strong>.' });
+                    professionals.add('Médico de Família');
+                }
+
+                if (data.q22 <= 4) {
+                    orientations.push({ title: 'Aumentando a motivação', text: 'A motivação para a mudança de hábitos está baixa (fase de pré-contemplação). É importante aplicar a entrevista motivacional: explorar os motivos pessoais para a mudança, ambivalências e conectar as metas de saúde a valores significativos. Estratégias como <strong>definir pequenas recompensas não alimentares</strong> para cada conquista podem ajudar a aumentar a motivação ao longo do tempo.' });
+                }
+
+                if (data.q24 === 'estetica') {
+                    orientations.push({ title: 'Motivação focada na estética', text: 'Foi indicado que o motivo principal para a mudança de hábitos é "melhorar a aparência e autoestima". Embora este seja um objetivo válido, é importante também conectar as mudanças a metas de saúde mais amplas para garantir uma motivação sustentável e evitar frustrações relacionadas ao peso e à imagem corporal.' });
+                }
+
+                if (data.q24 === 'outro') {
+                    orientations.push({ title: 'Explorando motivações pessoais', text: 'Foi indicado que o motivo principal para a mudança de hábitos é "outro". Recomenda-se explorar mais profundamente quais são esses motivos pessoais e como eles podem ser conectados às metas de saúde para fortalecer o compromisso com a mudança.' });
+                }
+
+                if (motivationDiscrepancy) {
+                    orientations.push({ title: 'Construindo confiança (autoeficácia)', text: 'Foi identificado que, embora a mudança seja muito importante, a confiança em conseguir realizá-la está baixa. A melhor estratégia é <strong>focar em metas muito pequenas e realistas</strong> para construir um histórico de sucessos e aumentar gradualmente a auto-confiança.' });
+                }
+
+                return { alerts, orientations, professionals, imc, narrative };
+            }
+
+            function generateNarrative(scores, data) {
+                const nome = data.nome ? data.nome.split(' ')[0] : 'O paciente';
+                const idade = data.idade || 'idade não informada';
+
+                // Mapeia os focos para nomes amigáveis
+                const focusMap = { AF: 'Atividade Física', AL: 'Alimentação', SM: 'Saúde Mental', MG: 'Metabolismo/Genética' };
+
+                // Encontra os focos com maior pontuação
+                const sortedScores = Object.entries(scores).sort(([, a], [, b]) => b - a);
+                const mainFocusKey = sortedScores[0][0];
+                const secondFocusKey = sortedScores[1][0];
+
+                let narrative = `${nome}, de ${idade} anos, tem resultados indicando que os principais pontos de atenção estão nos domínios de <strong>${focusMap[mainFocusKey]}</strong> e, secundariamente, em <strong>${focusMap[secondFocusKey]}</strong>. `;
+
+                // Adiciona detalhes contextuais
+                if (mainFocusKey === 'AL' && parseInt(data.q10, 10) >= 3) {
+                    narrative += "A percepção de perda de controle alimentar é um fator relevante. ";
+                }
+                if (mainFocusKey === 'SM' && (parseInt(data.q11, 10) >= 4 || parseInt(data.q12, 10) >= 4)) {
+                    narrative += "Sintomas de humor e ansiedade parecem ter um impacto significativo na rotina. ";
+                }
+                if (mainFocusKey === 'AF' && parseInt(data.q3, 10) === 3) {
+                    narrative += "O tempo elevado em comportamento sedentário é um desafio importante a ser abordado. ";
+                }
+                if (mainFocusKey === 'MG' && parseInt(data.q18, 10) >= 2) {
+                    narrative += "O histórico familiar sugere uma predisposição genética que deve ser considerada no plano de cuidados. ";
+                }
+
+                // Adiciona a parte de Motivação
+                const motivacao = parseInt(data.q22, 10);
+                const confianca = parseInt(data.q23, 10);
+                const q24Map = {
+                    'saude': 'melhorar a saúde e evitar doenças', 'disposicao': 'ter mais disposição e energia',
+                    'estetica': 'melhorar a aparência e autoestima', 'medica': 'atender a uma recomendação médica', 'outro': 'outro motivo específico'
+                };
+                const motivoPrincipal = q24Map[data.q24] || 'não informado';
+
+                let motivacaoTexto = '';
+                if (motivacao >= 7) motivacaoTexto = 'uma alta importância';
+                else if (motivacao >= 4) motivacaoTexto = 'uma importância moderada';
+                else motivacaoTexto = 'uma baixa importância';
+
+                let confiancaTexto = '';
+                if (confianca >= 7) confiancaTexto = 'e sente-se bastante confiante';
+                else if (confianca >= 4) confiancaTexto = 'e sente-se moderadamente confiante';
+                else confiancaTexto = 'e sente-se pouco confiante';
+
+                narrative += `Atualmente, ${nome} atribui <strong>${motivacaoTexto} (nota ${motivacao}/10)</strong> à mudança de hábitos, ${confiancaTexto} <strong>(nota ${confianca}/10)</strong> de que pode realizar as mudanças necessárias. Seu principal objetivo é <strong>${motivoPrincipal}</strong>.`
+
+                return narrative;
+            }
+
+            async function generatePDF() {
+                const { jsPDF } = window.jspdf;
+                const reportElement = document.getElementById('report-to-print');
+
+                // Temporariamente torna todas as seções visíveis para o PDF
+                const collapsibles = reportElement.querySelectorAll('.collapsible-content');
+                collapsibles.forEach(el => el.classList.add('expanded'));
+
+                await new Promise(resolve => setTimeout(resolve, 500)); // Espera a animação de expansão
+
+                html2canvas(reportElement, {
+                    scale: 2, // Melhora a qualidade da imagem
+                    useCORS: true
+                }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const canvasWidth = canvas.width;
+                    const canvasHeight = canvas.height;
+                    const ratio = canvasWidth / canvasHeight;
+                    const imgWidth = pdfWidth - 20; // com margens
+                    const imgHeight = imgWidth / ratio;
+
+                    let heightLeft = imgHeight;
+                    let position = 10; // margem superior
+
+                    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= (pdfHeight - 20);
+
+                    while (heightLeft > 0) {
+                        position = heightLeft - imgHeight + 10; // Ajusta a posição para a nova página
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                        heightLeft -= (pdfHeight - 20);
+                    }
+
+                    // Esconde as seções novamente
+                    collapsibles.forEach(el => el.classList.remove('expanded'));
+
+                    pdf.save(`Relatorio_IAMO_${document.getElementById('nome').value || 'Paciente'}.pdf`);
+                });
+            }
+
+            function exportData(scores, data) {
+                const exportObject = {
+                    timestamp: new Date().toISOString(),
+                    dados_iniciais: { nome: data.nome, idade: data.idade, sexo: data.sexo, peso: data.peso, altura: data.altura, tabagismo: data.tabagismo, etilismo: data.etilismo, ocupacao: data.ocupacao, horas_trabalho: data.horas_trabalho, transporte: data.transporte, escolaridade: data.escolaridade },
+                    respostas: data,
+                    scores_percentual: scores
+                };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObject, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `iamo_resultado_${data.nome.replace(/\s+/g, '_') || 'paciente'}_${new Date().getTime()}.json`);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            }
+
+            setupQuestions();
+            updateUI();
+        });
+    </script>
+</body>
+</html>
