@@ -32,10 +32,9 @@
         let db;
         let auth;
         try {
-            if (firebaseConfig.apiKey !== "AIzaSyAcZzh-e_s3pbpVi_4bJn-Wi1HxtaIph9g") {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
                 
                 // Autenticação anônima para permitir escrita no banco sem login do usuário
                 signInAnonymously(auth).catch((error) => {
