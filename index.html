@@ -16,8 +16,7 @@
         import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- COLE SUA CONFIGURAÇÃO DO FIREBASE AQUI ---
-        // Você pega esses dados no Console do Firebase > Configurações do Projeto > Geral > Seus aplicativos
+        // --- CONFIGURAÇÃO DO FIREBASE ---
         const firebaseConfig = {
           apiKey: "AIzaSyAcZzh-e_s3pbpVi_4bJn-Wi1HxtaIph9g",
           authDomain: "iamo-beta.firebaseapp.com",
@@ -27,7 +26,8 @@
           appId: "1:548076489654:web:e91a21fe68438a101acf17"
         };
 
-        // Inicializa Firebase
+        const app = initializeApp(firebaseConfig);
+
         // Nota: Se a config acima estiver vazia, o app funcionará apenas localmente sem salvar no banco
         let db;
         let auth;
@@ -198,8 +198,7 @@
 
     <div class="container mx-auto p-4 sm:p-6 md:p-8 max-w-4xl">
         <header class="mb-8 flex justify-center items-center gap-4">
-            <!-- Adicione sua logo aqui ou use um placeholder -->
-            <!-- <img src="iamo_logo.png" alt="IAMO Logo" class="h-16 w-16 sm:h-20 sm:w-20"> -->
+            <img src="iamo_logo.png" alt="IAMO Logo" class="h-16 w-16 sm:h-20 sm:w-20">
             <div class="text-center">
                 <h1 class="text-3xl sm:text-4xl font-bold text-blue-600">IAMO</h1>
                 <p class="text-lg text-gray-600">Instrumento de Avaliação Multifatorial da Obesidade</p>
