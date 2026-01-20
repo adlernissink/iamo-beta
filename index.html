@@ -32,18 +32,18 @@
         let db;
         let auth;
         try {
+            // Inicializa diretamente, sem verificação de placeholder
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-                
-                // Autenticação anônima para permitir escrita no banco sem login do usuário
-                signInAnonymously(auth).catch((error) => {
-                    console.error("Erro na autenticação anônima:", error);
-                });
-                console.log("Firebase inicializado com sucesso.");
-            } else {
-                console.warn("Firebase não configurado. Os dados não serão salvos na nuvem.");
-            }
+            
+            // Autenticação anônima para permitir escrita no banco sem login do usuário
+            signInAnonymously(auth).then(() => {
+                console.log("Firebase conectado e autenticado anonimamente.");
+            }).catch((error) => {
+                console.error("Erro na autenticação anônima:", error);
+            });
+
         } catch (e) {
             console.error("Erro ao inicializar Firebase:", e);
         }
